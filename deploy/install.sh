@@ -21,6 +21,8 @@ if ! id slack-buzz-mirror >/dev/null 2>&1; then
   useradd --system --gid slack-buzz-mirror --home-dir /var/lib/slack-buzz-mirror --shell /usr/sbin/nologin slack-buzz-mirror
 fi
 rsync -a --delete --exclude .git --exclude .env --exclude .data "$source_dir/" /opt/slack-buzz-mirror/app/
+chown -R root:root /opt/slack-buzz-mirror/app
+chmod 0755 /opt/slack-buzz-mirror/app
 cd /opt/slack-buzz-mirror/app
 npm install --omit=dev --ignore-scripts
 install -d -o root -g slack-buzz-mirror -m 0750 /etc/slack-buzz-mirror
