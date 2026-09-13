@@ -2,6 +2,7 @@ import {
   mappingIndex,
   saveChannelMappings,
 } from "./channel-map.js";
+import { mirrorChannelName } from "./mirror-name.js";
 
 export async function syncChannelMappings({
   config,
@@ -69,7 +70,11 @@ export async function syncChannelMappings({
 
   for (const channel of discovered) {
     const sourceName = channel.name || channel.id;
-    const buzzName = `${config.buzzChannelPrefix ?? ""}${sourceName}`;
+    const buzzName = mirrorChannelName({
+      prefix: config.buzzChannelPrefix ?? "",
+      sourceName,
+      slackChannelId: channel.id,
+    });
     let mapping = bySlackId.get(channel.id);
     if (!mapping) {
       const result = await buzzClient.createPrivateChannel(

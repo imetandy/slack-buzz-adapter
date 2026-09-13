@@ -15,6 +15,6 @@
     "doctor": "node --env-file-if-exists=.env src/doctor.js",
     "verify": "node --env-file-if-exists=.env src/verify-backfill.js",
     "test": "node --test",
-    "check": "node --check src/index.js && node --check src/channel-reconciler.js && node --check src/sync-channels.js && node --check src/backfill.js && node --check src/verify-backfill.js && node --check src/copilot.js && node --check src/doctor.js"
+    "check": "node --check src/index.js && node --check src/channel-reconciler.js && node --check src/sync-channels.js && node --check src/backfill.js && node --check src/verify-backfill.js && node --check src/copilot.js && node --check src/doctor.js && node --check src/mirror-name.js && node --check src/expansion-plan.js"
   }
 }
