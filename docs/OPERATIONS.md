@@ -47,6 +47,25 @@ restart it after the command exits successfully.
 Never broaden the allowlist merely to diagnose a mapping. An existing mapping
 outside the allowlist intentionally stops reconciliation.
 
+## Verify and repair thread links
+
+Stop the live service before any state-changing verification. A normal verifier
+run is read-only:
+
+```bash
+npm run verify -- --report /var/lib/slack-buzz-mirror/verification.txt
+```
+
+If the report identifies replies mirrored before their older Slack root was in
+scope, rerun explicitly with `--repair-threads`. The repair acquires the shared
+state lock, publishes a canonical threaded replacement, records the replacement
+receipt, and tombstones the superseded top-level event. It never changes Slack.
+
+```bash
+npm run verify -- --repair-threads \
+  --report /var/lib/slack-buzz-mirror/thread-repair-verification.txt
+```
+
 ## Media links
 
 The adapter does not re-host Slack files and has no media-link refresh worker.

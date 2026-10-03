@@ -12,6 +12,7 @@ async function main() {
   const config = loadConfig();
   const requestedChannel = argumentValue("--slack-channel");
   const reportPath = argumentValue("--report");
+  const repairThreads = process.argv.includes("--repair-threads");
   const mappings = requestedChannel
     ? config.channelMappings.filter(
         (mapping) => mapping.slackChannelId === requestedChannel,
@@ -25,23 +26,29 @@ async function main() {
   });
   const buzzClient = new BuzzClient({ executable: config.buzzCli });
   const stateStore = new JsonStateStore(config.statePath);
+  if (repairThreads) await stateStore.acquireLock("thread-repair");
   await stateStore.load();
-  const results = [];
-  for (const mapping of mappings) {
-    results.push(
-      await verifyChannelMirror({
-        slackClient,
-        buzzClient,
-        stateStore,
-        mapping,
-        oldest: config.backfillOldest,
-      }),
-    );
+  try {
+    const results = [];
+    for (const mapping of mappings) {
+      results.push(
+        await verifyChannelMirror({
+          slackClient,
+          buzzClient,
+          stateStore,
+          mapping,
+          oldest: config.backfillOldest,
+          repairThreads,
+        }),
+      );
+    }
+    const report = formatVerificationReport(results);
+    if (reportPath) await writeFile(reportPath, report, { mode: 0o600 });
+    process.stdout.write(report);
+    if (results.some((result) => !result.ok)) process.exitCode = 1;
+  } finally {
+    if (repairThreads) await stateStore.releaseLock();
   }
-  const report = formatVerificationReport(results);
-  if (reportPath) await writeFile(reportPath, report, { mode: 0o600 });
-  process.stdout.write(report);
-  if (results.some((result) => !result.ok)) process.exitCode = 1;
 }
 
 function argumentValue(name) {

@@ -135,6 +135,20 @@ export class BuzzClient {
     return JSON.parse(output);
   }
 
+  async deleteMessage(eventId, reason = "superseded-thread-repair") {
+    const output = await this.runner(this.executable, [
+      "messages",
+      "delete",
+      "--event",
+      eventId,
+      "--reason-code",
+      reason,
+      "--public-reason",
+      "Superseded by the canonical threaded mirror event",
+    ]);
+    return JSON.parse(output);
+  }
+
   async getMessages(channelId, limit = 200) {
     const output = await this.runner(this.executable, [
       "messages",

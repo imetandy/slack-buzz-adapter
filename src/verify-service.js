@@ -8,6 +8,7 @@ export async function verifyChannelMirror({
   mapping,
   oldest,
   buzzLimit = 200,
+  repairThreads = false,
 }) {
   const collection = await collectChannelMessages({
     slackClient,
@@ -32,6 +33,7 @@ export async function verifyChannelMirror({
   let receipts = 0;
   let present = 0;
   let threadLinks = 0;
+  let repairedThreads = 0;
 
   for (const message of sourceMessages) {
     const receipt = stateStore.getMessage(
@@ -50,10 +52,37 @@ export async function verifyChannelMirror({
       const parent = stateStore.getMessage(
         sourceKey(mapping.slackChannelId, message.thread_ts),
       );
-      const hasReplyTarget = mirrored?.tags?.some(
-        (tag) => tag[0] === "e" && tag[1] === parent?.buzzEventId,
+      const hasReplyTarget = canonicalReplyTargets(mirrored?.tags).has(
+        parent?.buzzEventId,
       );
       if (parent?.buzzEventId && hasReplyTarget) {
+        threadLinks += 1;
+      } else if (parent?.buzzEventId && mirrored && repairThreads) {
+        const replacement = await buzzClient.sendMessage(
+          mapping.buzzChannelId,
+          receipt.content,
+          parent.buzzEventId,
+        );
+        if (!replacement?.event_id) {
+          failures.push(`thread repair did not return an event ID for ${message.ts}`);
+          continue;
+        }
+        const previousEventId = receipt.buzzEventId;
+        await stateStore.record({
+          sourceKey: sourceKey(mapping.slackChannelId, message.ts),
+          message: {
+            ...receipt,
+            buzzEventId: replacement.event_id,
+            buzzReplyToEventId: parent.buzzEventId,
+            supersededBuzzEventIds: [
+              ...(receipt.supersededBuzzEventIds ?? []),
+              previousEventId,
+            ],
+            threadRepairedAt: new Date().toISOString(),
+          },
+        });
+        await buzzClient.deleteMessage(previousEventId);
+        repairedThreads += 1;
         threadLinks += 1;
       } else if (mirrored || !truncated) {
         failures.push(`invalid thread parent for ${message.ts}`);
@@ -85,6 +114,7 @@ export async function verifyChannelMirror({
     receipts,
     present: truncated ? "skipped-truncated" : present,
     threadLinks,
+    repairedThreads,
     changedSamples,
     buzzFetchTruncated: truncated,
     failures,
@@ -106,6 +136,7 @@ export function formatVerificationReport(results, observedAt = new Date()) {
       `  receipts: ${result.receipts}`,
       `  Buzz presence: ${result.present}`,
       `  thread links: ${result.threadLinks}`,
+      `  repaired thread links: ${result.repairedThreads}`,
       `  changed/deleted samples: ${result.changedSamples}`,
       `  Buzz fetch truncated: ${result.buzzFetchTruncated}`,
     );
@@ -113,4 +144,13 @@ export function formatVerificationReport(results, observedAt = new Date()) {
     lines.push("");
   }
   return `${lines.join("\n")}\n`;
+}
+
+export function canonicalReplyTargets(tags = []) {
+  const replyTags = tags.filter(
+    (tag) => tag[0] === "e" && tag[3] === "reply" && tag[1],
+  );
+  if (replyTags.length > 0) return new Set(replyTags.map((tag) => tag[1]));
+  const eventTags = tags.filter((tag) => tag[0] === "e" && tag[1]);
+  return new Set(eventTags.slice(-1).map((tag) => tag[1]));
 }
